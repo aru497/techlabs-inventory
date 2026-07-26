@@ -1,13 +1,10 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-function LoginForm() {
+export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const from = params.get('from') || '/';
-
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
@@ -25,7 +22,9 @@ function LoginForm() {
         body: JSON.stringify({ user, password }),
       });
       if (res.ok) {
-        router.replace(from);
+        // Return to where the middleware sent us from, if any.
+        const from = new URLSearchParams(window.location.search).get('from') || '/';
+        router.replace(from.startsWith('/') ? from : '/');
         router.refresh();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -86,13 +85,5 @@ function LoginForm() {
         </button>
       </form>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginForm />
-    </Suspense>
   );
 }
