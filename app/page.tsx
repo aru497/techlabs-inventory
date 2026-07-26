@@ -112,14 +112,24 @@ export default function Home() {
     [items],
   );
 
-  // Asset types with counts, for the category-first browse.
+  // Asset types with counts, total units, and low-stock signal.
   const categories = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { count: number; qty: number; low: number }>();
     for (const it of items) {
       const c = it.category || 'Uncategorized';
-      map.set(c, (map.get(c) ?? 0) + 1);
+      const e = map.get(c) ?? { count: 0, qty: 0, low: 0 };
+      e.count += 1;
+      e.qty += it.quantity ?? 0;
+      if (it.quantity === 0) e.low += 1;
+      map.set(c, e);
     }
-    return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    return [...map.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.count - a.count);
+  }, [items]);
+
+  const totals = useMemo(() => {
+    let qty = 0, low = 0;
+    for (const it of items) { qty += it.quantity ?? 0; if (it.quantity === 0) low += 1; }
+    return { qty, low };
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -294,9 +304,10 @@ export default function Home() {
               onClick={() => setCategory('')}
               aria-pressed={category === ''}
             >
+              {totals.low > 0 && <span className="low-dot" title={`${totals.low} out of stock`} aria-hidden="true" />}
               <span className="type-icon"><IconGrid /></span>
               <span className="type-name">All items</span>
-              <span className="type-count">{items.length}</span>
+              <span className="type-meta">{items.length} items · {totals.qty} units</span>
             </button>
             {categories.map((c) => (
               <button
@@ -305,9 +316,10 @@ export default function Home() {
                 onClick={() => setCategory((v) => (v === c.name ? '' : c.name))}
                 aria-pressed={category === c.name}
               >
+                {c.low > 0 && <span className="low-dot" title={`${c.low} out of stock`} aria-hidden="true" />}
                 <span className="type-icon"><IconType /></span>
                 <span className="type-name">{c.name}</span>
-                <span className="type-count">{c.count}</span>
+                <span className="type-meta">{c.count} items · {c.qty} units</span>
               </button>
             ))}
           </div>

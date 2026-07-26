@@ -232,10 +232,14 @@ select option { background: var(--green-deep); color: var(--text); }
 }
 .type-card.active .type-icon { background: rgba(200,242,78,0.2); border-color: rgba(200,242,78,0.4); }
 .type-card .type-name { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
-.type-card .type-count {
-  font-family: var(--mono); font-size: 12px; color: var(--text-faint);
+.type-card .type-meta {
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
-.type-card.active .type-count { color: var(--lime-bright); }
+.type-card.active .type-meta { color: var(--lime-bright); }
+.type-card .low-dot {
+  position: absolute; top: 12px; right: 12px; width: 8px; height: 8px; border-radius: 50%;
+  background: #ffb020; box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.18);
+}
 
 /* ── Toolbar: search + filters + export ───────────────────────────────────── */
 .toolbar { margin-top: 22px; padding: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
