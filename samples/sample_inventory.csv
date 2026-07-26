@@ -1,0 +1,6 @@
+Item Code,Product Name,Type,Qty On Hand,UoM,Rate,Curr,Warehouse,Vendor,Min Stock
+TL-1001,USB-C Cable 1m,Cables,240,each,3.50,USD,A1-04,Anker,50
+TL-1002,Mechanical Keyboard,Peripherals,32,each,89.00,USD,B2-11,Keychron,10
+TL-1003,HDMI Adapter,Cables,0,each,12.99,USD,A1-07,Belkin,25
+TL-1004,27" Monitor,Displays,14,each,219.00,USD,C3-02,Dell,5
+TL-1005,Laptop Stand,Accessories,58,each,24.95,USD,B2-03,Rain Design,15
