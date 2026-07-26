@@ -184,7 +184,7 @@ export async function normalize(headers: string[], rows: Row[]): Promise<Normali
       reorder_level: null,
       raw: row,
     };
-    const target = item as Record<string, string | number | null | Record<string, unknown>>;
+    const target = item as unknown as Record<string, string | number | null>;
     for (const [header, field] of Object.entries(mapping)) {
       if (!field) continue;
       target[field] = coerce(row[header], field);
