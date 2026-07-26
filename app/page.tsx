@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Boxes, ListChecks, CalendarClock, FileUp, BarChart3,
   Warehouse, Search, Download, Plus, Pencil, Trash2, X, PackageOpen,
-  Upload, Sheet, Recycle,
+  Upload, Sheet, Recycle, PackageCheck, Rocket, Wrench, Archive,
+  TriangleAlert, Banknote, Lock, Laptop, Monitor, Network, HardDrive,
+  Keyboard, Armchair, HardHat, Camera, Cable, Package, Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { Item, STATUSES, STATUS_LABEL, STATUS_TONE, daysUntil } from '@/lib/itam';
 
@@ -28,14 +31,47 @@ const VIEW_META: Record<View, { title: string; sub: string }> = {
   reporting: { title: 'Reporting', sub: 'Distribution, value, and recycling.' },
 };
 
-const FORM_FIELDS = ['name', 'sku', 'category', 'status', 'quantity', 'unit', 'unit_price', 'currency', 'location', 'owner', 'supplier', 'assigned_to', 'reorder_level', 'next_calibration', 'notes'] as const;
+/* ── Lifecycle + category iconography ─────────────────────────────────────── */
+const STATUS_ICON: Record<string, LucideIcon> = {
+  in_stock: PackageCheck, deployed: Rocket, in_repair: Wrench, retired: Archive, recycled: Recycle,
+};
 
-const money = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+function categoryIcon(name: string | null): LucideIcon {
+  const s = (name || '').toLowerCase();
+  if (s.includes('laptop') || s.includes('computer')) return Laptop;
+  if (s.includes('monitor') || s.includes('display') || s.includes('screen')) return Monitor;
+  if (s.includes('network') || s.includes('switch') || s.includes('router')) return Network;
+  if (s.includes('storage') || s.includes('drive') || s.includes('server') || s.includes('ups')) return HardDrive;
+  if (s.includes('peripheral') || s.includes('keyboard') || s.includes('mouse') || s.includes('scanner')) return Keyboard;
+  if (s.includes('furniture') || s.includes('chair') || s.includes('desk')) return Armchair;
+  if (s.includes('safety') || s.includes('harness')) return HardHat;
+  if (s.includes('camera')) return Camera;
+  if (s.includes('cable') || s.includes('adapter')) return Cable;
+  if (s.includes('tool') || s.includes('drill')) return Wrench;
+  return Package;
+}
 
 function StatusBadge({ status }: { status: string | null }) {
   const s = status || 'in_stock';
-  return <span className={`status-badge ${STATUS_TONE[s] || 'stock'}`}>{STATUS_LABEL[s] || s}</span>;
+  const Icon = STATUS_ICON[s] || PackageCheck;
+  return (
+    <span className={`status-badge ${STATUS_TONE[s] || 'stock'}`}>
+      <Icon size={12} strokeWidth={2.1} />{STATUS_LABEL[s] || s}
+    </span>
+  );
 }
+function StatusIco({ status }: { status: string | null }) {
+  const s = status || 'in_stock';
+  const Icon = STATUS_ICON[s] || PackageCheck;
+  return <span className={`status-ico ${STATUS_TONE[s] || 'stock'}`}><Icon size={13} strokeWidth={2} /></span>;
+}
+function CatIco({ category, size = 15 }: { category: string | null; size?: number }) {
+  const Icon = categoryIcon(category);
+  return <span className="cell-ico"><Icon size={size} strokeWidth={1.8} /></span>;
+}
+
+const FORM_FIELDS = ['name', 'sku', 'category', 'status', 'quantity', 'unit', 'unit_price', 'currency', 'location', 'owner', 'supplier', 'assigned_to', 'reorder_level', 'next_calibration', 'notes'] as const;
+const money = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 /* ── Add / Edit drawer ─────────────────────────────────────────────────────── */
 function ItemDrawer({
@@ -127,6 +163,19 @@ function ItemDrawer({
   );
 }
 
+/* ── Stat card ─────────────────────────────────────────────────────────────── */
+function Stat({ icon, tone, value, label, sub, warn }: {
+  icon: React.ReactNode; tone: string; value: React.ReactNode; label: string; sub?: string; warn?: boolean;
+}) {
+  return (
+    <div className={`glass stat-card${warn ? ' warn' : ''}`}>
+      <div className="stat-head"><span className={`stat-icon ${tone}`}>{icon}</span><span className="stat-label">{label}</span></div>
+      <div className="stat-value">{value}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
@@ -138,6 +187,10 @@ export default function Home() {
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
   const [drawer, setDrawer] = useState<Partial<Item> | null | 'closed'>('closed');
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
+  const [delPw, setDelPw] = useState('');
+  const [delBusy, setDelBusy] = useState(false);
+  const [delError, setDelError] = useState('');
   const [toast, setToast] = useState('');
   // ingest state
   const [dragging, setDragging] = useState(false);
@@ -180,7 +233,6 @@ export default function Home() {
     });
   }, [items, query, owner, location, category, status]);
 
-  // KPIs
   const kpi = useMemo(() => {
     const byStatus: Record<string, number> = {};
     let units = 0, value = 0, low = 0;
@@ -204,6 +256,11 @@ export default function Home() {
   }, [items, today]);
   const calDueSoon = calItems.filter((x) => (x.d as number) <= 30).length;
 
+  const recent = useMemo(
+    () => [...items].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6),
+    [items],
+  );
+
   const hasFilter = Boolean(query || owner || location || category || status);
 
   function exportCsv() {
@@ -219,15 +276,28 @@ export default function Home() {
   }
 
   async function changeStatus(id: string, newStatus: string) {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, status: newStatus } : it))); // optimistic
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, status: newStatus } : it)));
     const res = await fetch(`/api/items/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
     if (res.ok) showToast(`Moved to ${STATUS_LABEL[newStatus]}.`); else { showToast('Update failed.'); loadInventory(); }
   }
 
-  async function deleteItem(it: Item) {
-    if (!window.confirm(`Delete "${it.name}"? This cannot be undone.`)) return;
-    const res = await fetch(`/api/items/${it.id}`, { method: 'DELETE' });
-    if (res.ok) { showToast('Asset deleted.'); loadInventory(); } else showToast('Delete failed.');
+  function openDelete(it: Item) {
+    setDeleteTarget(it); setDelPw(''); setDelError(''); setDelBusy(false);
+  }
+  async function confirmDelete(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deleteTarget) return;
+    setDelBusy(true); setDelError('');
+    try {
+      const res = await fetch(`/api/items/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: delPw }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { showToast('Asset deleted.'); setDeleteTarget(null); loadInventory(); }
+      else { setDelError(d.error || 'Delete failed.'); setDelBusy(false); }
+    } catch { setDelError('Network error — try again.'); setDelBusy(false); }
   }
 
   async function logout() { await fetch('/api/logout', { method: 'POST' }); router.replace('/login'); router.refresh(); }
@@ -268,9 +338,11 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-foot">
-          <span className="pill">{items.length} assets</span>
-          {kpi.low > 0 && <span className="pill warn">{kpi.low} low</span>}
+        <div className="sidebar-foot side-summary">
+          <div className="sum-row"><Boxes size={14} /><span>Assets</span><strong>{items.length}</strong></div>
+          <div className="sum-row"><Users size={14} /><span>Customers</span><strong>{owners.length}</strong></div>
+          {kpi.low > 0 && <div className="sum-row warn"><TriangleAlert size={14} /><span>Low stock</span><strong>{kpi.low}</strong></div>}
+          {(kpi.byStatus.in_repair ?? 0) > 0 && <div className="sum-row warn"><Wrench size={14} /><span>In repair</span><strong>{kpi.byStatus.in_repair}</strong></div>}
         </div>
       </aside>
 
@@ -294,29 +366,44 @@ export default function Home() {
               {view === 'dashboard' && (
                 <>
                   <div className="stat-grid">
-                    <div className="glass stat-card"><div className="stat-value">{items.length}</div><div className="stat-label">Total assets</div><div className="stat-sub">{kpi.units} units</div></div>
-                    <div className="glass stat-card"><div className="stat-value">{kpi.byStatus.in_stock ?? 0}</div><div className="stat-label">In stock</div></div>
-                    <div className="glass stat-card"><div className="stat-value">{kpi.byStatus.deployed ?? 0}</div><div className="stat-label">Deployed</div></div>
-                    <div className="glass stat-card"><div className="stat-value">{kpi.byStatus.in_repair ?? 0}</div><div className="stat-label">In repair</div></div>
-                    <div className="glass stat-card"><div className="stat-value">USD {money(kpi.value)}</div><div className="stat-label">Stock value</div></div>
-                    <div className={`glass stat-card${calDueSoon ? ' warn' : ''}`}><div className="stat-value">{calDueSoon}</div><div className="stat-label">Calibration due</div><div className="stat-sub">next 30 days</div></div>
-                    <div className={`glass stat-card${kpi.low ? ' warn' : ''}`}><div className="stat-value">{kpi.low}</div><div className="stat-label">Low / out of stock</div></div>
-                    <div className="glass stat-card"><div className="stat-value">{(kpi.byStatus.retired ?? 0) + (kpi.byStatus.recycled ?? 0)}</div><div className="stat-label">Retired / recycled</div></div>
+                    <Stat icon={<Boxes size={17} />} tone="t-lime" value={items.length} label="Total assets" sub={`${kpi.units} units`} />
+                    <Stat icon={<PackageCheck size={17} />} tone="t-lime" value={kpi.byStatus.in_stock ?? 0} label="In stock" />
+                    <Stat icon={<Rocket size={17} />} tone="t-blue" value={kpi.byStatus.deployed ?? 0} label="Deployed" />
+                    <Stat icon={<Wrench size={17} />} tone="t-amber" value={kpi.byStatus.in_repair ?? 0} label="In repair" />
+                    <Stat icon={<Banknote size={17} />} tone="t-teal" value={`USD ${money(kpi.value)}`} label="Stock value" />
+                    <Stat icon={<CalendarClock size={17} />} tone="t-amber" value={calDueSoon} label="Calibration due" sub="next 30 days" warn={calDueSoon > 0} />
+                    <Stat icon={<TriangleAlert size={17} />} tone="t-red" value={kpi.low} label="Low / out of stock" warn={kpi.low > 0} />
+                    <Stat icon={<Recycle size={17} />} tone="t-slate" value={(kpi.byStatus.retired ?? 0) + (kpi.byStatus.recycled ?? 0)} label="Retired / recycled" />
                   </div>
 
-                  <div className="section-title">Lifecycle</div>
-                  <div className="glass bars">
-                    {STATUSES.map((s) => {
-                      const n = kpi.byStatus[s.key] ?? 0;
-                      const pct = items.length ? Math.round((n / items.length) * 100) : 0;
-                      return (
-                        <div className="bar-row" key={s.key}>
-                          <span className="bar-label"><StatusBadge status={s.key} /></span>
-                          <span className="bar-track"><span className={`bar-fill ${s.tone}`} style={{ width: `${pct}%` }} /></span>
-                          <span className="bar-val">{n}</span>
-                        </div>
-                      );
-                    })}
+                  <div className="dash-cols">
+                    <div className="glass panel">
+                      <div className="panel-title">Lifecycle</div>
+                      {STATUSES.map((s) => {
+                        const n = kpi.byStatus[s.key] ?? 0;
+                        const pct = items.length ? Math.round((n / items.length) * 100) : 0;
+                        return (
+                          <div className="bar-row" key={s.key}>
+                            <span className="bar-label"><StatusBadge status={s.key} /></span>
+                            <span className="bar-track"><span className={`bar-fill ${s.tone}`} style={{ width: `${pct}%` }} /></span>
+                            <span className="bar-val">{n}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="glass panel">
+                      <div className="panel-title">Recent activity</div>
+                      {recent.length === 0 ? <p className="hint">Nothing yet.</p> : recent.map((it) => (
+                        <button className="recent-row" key={it.id} onClick={() => setDrawer(it)}>
+                          <CatIco category={it.category} />
+                          <span className="recent-main">
+                            <strong>{it.name}</strong>
+                            <span>{it.sku || it.category || '—'} · added {new Date(it.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                          </span>
+                          <StatusBadge status={it.status} />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -370,12 +457,15 @@ export default function Home() {
                             {filtered.map((it) => (
                               <tr key={it.id}>
                                 <td className="mono-cell">{it.sku ?? <span className="dash">—</span>}</td>
-                                <td className="strong">{it.name ?? <span className="dash">—</span>}</td>
+                                <td className="strong asset-cell"><CatIco category={it.category} />{it.name ?? <span className="dash">—</span>}</td>
                                 <td>{it.category ? <span className="pill">{it.category}</span> : <span className="dash">—</span>}</td>
                                 <td>
-                                  <select className={`status-select ${STATUS_TONE[it.status || 'in_stock']}`} value={it.status || 'in_stock'} onChange={(e) => changeStatus(it.id, e.target.value)} aria-label="Change status">
-                                    {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                                  </select>
+                                  <div className="status-cell">
+                                    <StatusIco status={it.status} />
+                                    <select className={`status-select ${STATUS_TONE[it.status || 'in_stock']}`} value={it.status || 'in_stock'} onChange={(e) => changeStatus(it.id, e.target.value)} aria-label="Change status">
+                                      {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                                    </select>
+                                  </div>
                                 </td>
                                 <td className={`num${it.quantity === 0 ? ' qty-zero' : ''}`}>{it.quantity ?? <span className="dash">—</span>}</td>
                                 <td>{it.location ?? <span className="dash">—</span>}</td>
@@ -383,7 +473,7 @@ export default function Home() {
                                 <td>{it.assigned_to ?? <span className="dash">—</span>}</td>
                                 <td className="row-actions">
                                   <button className="icon-btn" onClick={() => setDrawer(it)} aria-label="Edit"><Pencil size={15} /></button>
-                                  <button className="icon-btn danger" onClick={() => deleteItem(it)} aria-label="Delete"><Trash2 size={15} /></button>
+                                  <button className="icon-btn danger" onClick={() => openDelete(it)} aria-label="Delete"><Trash2 size={15} /></button>
                                 </td>
                               </tr>
                             ))}
@@ -411,7 +501,7 @@ export default function Home() {
                         <tbody>
                           {calItems.map(({ it, d }) => (
                             <tr key={it.id}>
-                              <td className="strong">{it.name}</td>
+                              <td className="strong asset-cell"><CatIco category={it.category} />{it.name}</td>
                               <td>{it.category ? <span className="pill">{it.category}</span> : <span className="dash">—</span>}</td>
                               <td><StatusBadge status={it.status} /></td>
                               <td>{it.location ?? <span className="dash">—</span>}</td>
@@ -471,6 +561,25 @@ export default function Home() {
       {drawer !== 'closed' && (
         <ItemDrawer item={drawer} onClose={() => setDrawer('closed')} onSaved={() => { setDrawer('closed'); loadInventory(); }} categories={categoryNames} owners={owners} locations={locations} showToast={showToast} />
       )}
+
+      {/* ── Password-confirmed delete ── */}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={() => !delBusy && setDeleteTarget(null)}>
+          <form className="glass modal" onClick={(e) => e.stopPropagation()} onSubmit={confirmDelete}>
+            <span className="danger-ico"><Trash2 size={20} /></span>
+            <h3>Delete “{deleteTarget.name}”?</h3>
+            <p>This permanently removes the asset{deleteTarget.sku ? <> (tag <strong>{deleteTarget.sku}</strong>)</> : null}. To confirm, re-enter your admin password.</p>
+            <label className="field-label" htmlFor="del-pw"><Lock size={12} style={{ verticalAlign: -2, marginRight: 5 }} />Admin password</label>
+            <input id="del-pw" type="password" autoComplete="current-password" autoFocus value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder="••••••••" required />
+            {delError && <div className="login-error" role="alert">{delError}</div>}
+            <div className="modal-actions">
+              <button type="button" className="ghost-btn" onClick={() => setDeleteTarget(null)} disabled={delBusy}>Cancel</button>
+              <button type="submit" className="danger-btn" disabled={delBusy || !delPw}>{delBusy ? <span className="spinner" /> : null}Delete asset</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -502,7 +611,7 @@ function Catalog({ items, onPick }: { items: Item[]; onPick: (c: string) => void
         <tbody>
           {rows.map((r) => (
             <tr key={r.name} className="clickable" onClick={() => onPick(r.name)}>
-              <td className="strong">{r.name}</td>
+              <td className="strong asset-cell"><CatIco category={r.name} size={16} />{r.name}</td>
               <td className="num">{r.count}</td>
               <td className="num">{r.inStock}</td>
               <td className="num">{r.deployed}</td>
@@ -526,10 +635,10 @@ function Reporting({ items, kpi }: { items: Item[]; kpi: { byStatus: Record<stri
   return (
     <>
       <div className="stat-grid">
-        <div className="glass stat-card"><div className="stat-value">{items.length}</div><div className="stat-label">Total assets</div></div>
-        <div className="glass stat-card"><div className="stat-value">USD {money(kpi.value)}</div><div className="stat-label">Stock value</div></div>
-        <div className="glass stat-card"><div className="stat-value">{byOwner.length}</div><div className="stat-label">Customers</div></div>
-        <div className="glass stat-card"><div className="stat-value">{byWarehouse.length}</div><div className="stat-label">Warehouses</div></div>
+        <Stat icon={<Boxes size={17} />} tone="t-lime" value={items.length} label="Total assets" />
+        <Stat icon={<Banknote size={17} />} tone="t-teal" value={`USD ${money(kpi.value)}`} label="Stock value" />
+        <Stat icon={<Users size={17} />} tone="t-blue" value={byOwner.length} label="Customers" />
+        <Stat icon={<Warehouse size={17} />} tone="t-slate" value={byWarehouse.length} label="Warehouses" />
       </div>
       <div className="report-cols">
         <div className="glass report-card">
@@ -547,7 +656,7 @@ function Reporting({ items, kpi }: { items: Item[]; kpi: { byStatus: Record<stri
           <table>
             <thead><tr><th>Asset</th><th>Type</th><th>Status</th><th>Customer</th><th>Warehouse</th></tr></thead>
             <tbody>{recycled.map((it) => (
-              <tr key={it.id}><td className="strong">{it.name}</td><td>{it.category ? <span className="pill">{it.category}</span> : <span className="dash">—</span>}</td><td><StatusBadge status={it.status} /></td><td>{it.owner ?? <span className="dash">—</span>}</td><td>{it.location ?? <span className="dash">—</span>}</td></tr>
+              <tr key={it.id}><td className="strong asset-cell"><CatIco category={it.category} />{it.name}</td><td>{it.category ? <span className="pill">{it.category}</span> : <span className="dash">—</span>}</td><td><StatusBadge status={it.status} /></td><td>{it.owner ?? <span className="dash">—</span>}</td><td>{it.location ?? <span className="dash">—</span>}</td></tr>
             ))}</tbody>
           </table>
         </div></div>
