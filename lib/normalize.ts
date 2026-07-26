@@ -180,6 +180,7 @@ export async function normalize(headers: string[], rows: Row[]): Promise<Normali
       unit_price: null,
       currency: null,
       location: null,
+      owner: null,
       supplier: null,
       reorder_level: null,
       raw: row,

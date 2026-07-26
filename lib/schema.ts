@@ -10,6 +10,7 @@ export type CanonicalField =
   | 'unit_price'
   | 'currency'
   | 'location'
+  | 'owner'
   | 'supplier'
   | 'reorder_level';
 
@@ -79,10 +80,16 @@ export const FIELD_DEFS: FieldDef[] = [
     description: 'Physical storage location',
   },
   {
+    field: 'owner',
+    type: 'string',
+    synonyms: ['owner', 'customer', 'client', 'account', 'tenant', 'belongs to', 'asset owner', 'customer name', 'client name', 'company', 'organisation', 'organization'],
+    description: 'Customer / owner the asset belongs to (whose stock this is)',
+  },
+  {
     field: 'supplier',
     type: 'string',
     synonyms: ['supplier', 'vendor', 'manufacturer', 'brand', 'maker', 'source company'],
-    description: 'Supplier or vendor name',
+    description: 'Supplier or vendor the item was bought from',
   },
   {
     field: 'reorder_level',
@@ -108,6 +115,7 @@ export interface CanonicalItem {
   unit_price: number | null;
   currency: string | null;
   location: string | null;
+  owner: string | null;
   supplier: string | null;
   reorder_level: number | null;
   raw: Record<string, unknown>;

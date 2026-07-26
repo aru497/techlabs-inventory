@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface InventoryRow {
   id: string;
@@ -12,6 +13,7 @@ interface InventoryRow {
   unit_price: number | null;
   currency: string | null;
   location: string | null;
+  owner: string | null;
   supplier: string | null;
   created_at: string;
 }
@@ -22,78 +24,121 @@ interface IngestResult {
   rowsIngested?: number;
   usedLlm?: boolean;
   columnMapping?: Record<string, string | null>;
-  preview?: unknown[];
 }
 
-/* ── Inline icons (consistent 1.6 stroke, no icon library / emoji) ─────────── */
-function IconUpload() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 16V4m0 0L7 9m5-5 5 5" />
-      <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
-    </svg>
-  );
-}
-function IconSheet() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" />
-      <path d="M3.5 9h17M3.5 14.5h17M9 9v11.5M15 9v11.5" />
-    </svg>
-  );
-}
-function IconBox() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" />
-      <path d="m3 8 9 5 9-5M12 13v8" />
-    </svg>
-  );
+/* ── Inline icons (consistent stroke, no icon library / emoji) ─────────────── */
+const svg = (path: React.ReactNode, size = 18) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {path}
+  </svg>
+);
+const IconUpload = () => svg(<><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></>);
+const IconSheet = () => svg(<><rect x="3.5" y="3.5" width="17" height="17" rx="2.5" /><path d="M3.5 9h17M3.5 14.5h17M9 9v11.5M15 9v11.5" /></>);
+const IconSearch = () => svg(<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></>);
+const IconExport = () => svg(<><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M5 21h14" /></>);
+const IconBox = () => svg(<><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></>, 26);
+
+function toCsv(rows: InventoryRow[]): string {
+  const cols: (keyof InventoryRow)[] = ['sku', 'name', 'category', 'quantity', 'unit', 'unit_price', 'currency', 'location', 'owner', 'supplier'];
+  const esc = (v: unknown) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = cols.join(',');
+  const body = rows.map((r) => cols.map((c) => esc(r[c])).join(',')).join('\n');
+  return `${head}\n${body}`;
 }
 
 export default function Home() {
+  const router = useRouter();
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
   const [result, setResult] = useState<IngestResult | null>(null);
   const [items, setItems] = useState<InventoryRow[]>([]);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [query, setQuery] = useState('');
+  const [owner, setOwner] = useState('');
+  const [location, setLocation] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const loadInventory = useCallback(async () => {
     try {
-      const res = await fetch('/api/inventory?limit=200');
+      const res = await fetch('/api/inventory?limit=500');
+      if (res.status === 401) {
+        router.replace('/login');
+        return;
+      }
       const data = await res.json();
       setItems(data.items ?? []);
       setConfigured(data.configured ?? null);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadInventory();
   }, [loadInventory]);
 
-  // Scroll-entry reveal — IntersectionObserver, not scroll listeners.
   useEffect(() => {
     const els = rootRef.current?.querySelectorAll('.reveal');
     if (!els?.length) return;
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add('in');
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.12 },
+      (entries) => entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      }),
+      { threshold: 0.1 },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [items.length, configured]);
+
+  const owners = useMemo(
+    () => [...new Set(items.map((i) => i.owner).filter(Boolean))].sort() as string[],
+    [items],
+  );
+  const locations = useMemo(
+    () => [...new Set(items.map((i) => i.location).filter(Boolean))].sort() as string[],
+    [items],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((it) => {
+      if (owner && it.owner !== owner) return false;
+      if (location && it.location !== location) return false;
+      if (!q) return true;
+      return [it.sku, it.name, it.category, it.location, it.owner, it.supplier]
+        .some((v) => v && v.toLowerCase().includes(q));
+    });
+  }, [items, query, owner, location]);
+
+  const hasFilter = Boolean(query || owner || location);
+
+  function exportCsv() {
+    const csv = toCsv(filtered);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const tag = [owner, location].filter(Boolean).join('-').replace(/\s+/g, '_') || 'all';
+    a.href = url;
+    a.download = `inventory-${tag}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  }
 
   async function ingestFile(file: File) {
     setBusy(true);
@@ -139,23 +184,20 @@ export default function Home() {
 
   return (
     <div className="wrap" ref={rootRef}>
-      <header className="reveal">
-        <p className="eyebrow">
-          <span className="status-dot" aria-hidden="true" />
-          TechLabs · Inventory
-        </p>
-        <h1>
-          Ingest anything.<br />
-          One <em>clean</em> schema.
-        </h1>
-        <p className="lede">
-          Drop a spreadsheet or paste a Google Sheet link. A normalization agent maps any
-          column layout onto a single inventory schema, then writes it straight to your database.
-        </p>
+      <header className="topbar reveal">
+        <div>
+          <p className="eyebrow"><span className="status-dot" aria-hidden="true" />TechLabs · Inventory</p>
+          <h1>Find any asset<br />in <em>seconds</em>.</h1>
+        </div>
+        <button className="ghost-btn" onClick={logout}>Sign out</button>
       </header>
+      <p className="lede reveal">
+        Search across every warehouse, filter to one customer, and export exactly what you
+        need — no pulling the whole database. Works on your phone.
+      </p>
 
+      {/* ── Upload ──────────────────────────────────────────────────────────── */}
       <div className="grid">
-        {/* File upload */}
         <div className="card glass reveal">
           <div className="card-head">
             <span className="card-icon"><IconUpload /></span>
@@ -166,19 +208,11 @@ export default function Home() {
             className={`dropzone${dragging ? ' drag' : ''}`}
             role="button"
             tabIndex={0}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
             onClick={() => fileRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                fileRef.current?.click();
-              }
-            }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
           >
             <strong>Click to choose</strong> or drag a file here
             <span className="dz-formats">CSV · TSV · XLSX · JSON</span>
@@ -188,15 +222,10 @@ export default function Home() {
             type="file"
             accept=".csv,.tsv,.txt,.xlsx,.xls,.json"
             style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) ingestFile(f);
-              e.target.value = '';
-            }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) ingestFile(f); e.target.value = ''; }}
           />
         </div>
 
-        {/* Google Sheet */}
         <div className="card glass reveal">
           <div className="card-head">
             <span className="card-icon"><IconSheet /></span>
@@ -210,49 +239,68 @@ export default function Home() {
             placeholder="https://docs.google.com/spreadsheets/d/..."
             value={sheetUrl}
             onChange={(e) => setSheetUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') ingestSheet();
-            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') ingestSheet(); }}
           />
           <button onClick={ingestSheet} disabled={busy || !sheetUrl.trim()}>
-            {busy ? <span className="spinner" /> : null}
-            Ingest sheet
+            {busy ? <span className="spinner" /> : null}Ingest sheet
           </button>
         </div>
       </div>
 
       {busy && !result && (
-        <div className="msg ok glass" role="status" aria-live="polite">
-          <span className="spinner" /> &nbsp;Normalizing and ingesting…
-        </div>
+        <div className="msg ok glass" role="status" aria-live="polite"><span className="spinner" /> &nbsp;Normalizing and ingesting…</div>
       )}
-
       {result && (
         <div className={`msg glass ${result.error && !result.rowsIngested ? 'err' : 'ok'}`} role="status" aria-live="polite">
           {result.ok ? (
             <>
               Ingested <strong>{result.rowsIngested}</strong> rows.{' '}
-              {result.usedLlm
-                ? 'The agent used Haiku to map unrecognized columns.'
-                : 'All columns matched by rules — no LLM needed.'}
+              {result.usedLlm ? 'The agent used Haiku to map unrecognized columns.' : 'All columns matched by rules — no LLM needed.'}
               {result.columnMapping && (
                 <div className="mapping">
                   {Object.entries(result.columnMapping).map(([src, dst]) => (
-                    <div key={src}>
-                      {src} → {dst ? <code>{dst}</code> : <span className="drop">dropped</span>}
-                    </div>
+                    <div key={src}>{src} → {dst ? <code>{dst}</code> : <span className="drop">dropped</span>}</div>
                   ))}
                 </div>
               )}
             </>
-          ) : (
-            <>Error: {result.error}</>
-          )}
+          ) : (<>Error: {result.error}</>)}
         </div>
       )}
 
+      {/* ── Search + filters + export ───────────────────────────────────────── */}
+      <div className="toolbar glass reveal">
+        <div className="search">
+          <span className="search-icon"><IconSearch /></span>
+          <input
+            type="text"
+            placeholder="Search SKU, name, category, warehouse, customer…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search inventory"
+          />
+        </div>
+        <div className="filters">
+          <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Filter by customer">
+            <option value="">All customers</option>
+            {owners.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select value={location} onChange={(e) => setLocation(e.target.value)} aria-label="Filter by warehouse">
+            <option value="">All warehouses</option>
+            {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+          <button className="export-btn" onClick={exportCsv} disabled={!filtered.length}>
+            <IconExport />Export{hasFilter ? ' filtered' : ''} CSV
+          </button>
+        </div>
+      </div>
+
       <div className="section-title reveal">
-        Inventory {items.length ? <span className="count">· {items.length} items</span> : null}
+        Inventory
+        <span className="count">
+          {hasFilter ? `· ${filtered.length} of ${items.length}` : items.length ? `· ${items.length} items` : ''}
+        </span>
+        {hasFilter && <button className="clear-btn" onClick={() => { setQuery(''); setOwner(''); setLocation(''); }}>Clear</button>}
       </div>
 
       {configured === false ? (
@@ -265,38 +313,34 @@ export default function Home() {
           <div className="empty-icon"><IconBox /></div>
           No items yet — ingest a file or sheet to get started.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="glass empty reveal">
+          <div className="empty-icon"><IconSearch /></div>
+          No items match your search or filters.
+        </div>
       ) : (
         <div className="glass table-wrap reveal">
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>SKU</th>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th style={{ textAlign: 'right' }}>Qty</th>
-                  <th>Unit</th>
+                  <th>SKU</th><th>Name</th><th>Category</th>
+                  <th style={{ textAlign: 'right' }}>Qty</th><th>Unit</th>
                   <th style={{ textAlign: 'right' }}>Price</th>
-                  <th>Location</th>
-                  <th>Supplier</th>
+                  <th>Warehouse</th><th>Customer</th><th>Supplier</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
+                {filtered.map((it) => (
                   <tr key={it.id}>
                     <td className="mono-cell">{it.sku ?? <span className="dash">—</span>}</td>
                     <td className="strong">{it.name ?? <span className="dash">—</span>}</td>
                     <td>{it.category ? <span className="pill">{it.category}</span> : <span className="dash">—</span>}</td>
-                    <td className={`num${it.quantity === 0 ? ' qty-zero' : ''}`}>
-                      {it.quantity ?? <span className="dash">—</span>}
-                    </td>
+                    <td className={`num${it.quantity === 0 ? ' qty-zero' : ''}`}>{it.quantity ?? <span className="dash">—</span>}</td>
                     <td>{it.unit ?? <span className="dash">—</span>}</td>
-                    <td className="num">
-                      {it.unit_price != null
-                        ? `${it.currency ? it.currency + ' ' : ''}${it.unit_price}`
-                        : <span className="dash">—</span>}
-                    </td>
+                    <td className="num">{it.unit_price != null ? `${it.currency ? it.currency + ' ' : ''}${it.unit_price}` : <span className="dash">—</span>}</td>
                     <td>{it.location ?? <span className="dash">—</span>}</td>
+                    <td>{it.owner ? <span className="pill owner">{it.owner}</span> : <span className="dash">—</span>}</td>
                     <td>{it.supplier ?? <span className="dash">—</span>}</td>
                   </tr>
                 ))}

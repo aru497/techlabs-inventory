@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
     unit_price: item.unit_price,
     currency: item.currency,
     location: item.location,
+    owner: item.owner,
     supplier: item.supplier,
     reorder_level: item.reorder_level,
     source: sourceName,

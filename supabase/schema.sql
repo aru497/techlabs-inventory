@@ -32,6 +32,7 @@ create table if not exists public.inventory_items (
   unit_price    numeric,
   currency      text,
   location      text,
+  owner         text,                           -- customer this stock belongs to
   supplier      text,
   reorder_level numeric,
   source        text,                           -- filename or sheet URL
@@ -42,6 +43,8 @@ create table if not exists public.inventory_items (
 
 create index if not exists inventory_items_sku_idx      on public.inventory_items (sku);
 create index if not exists inventory_items_category_idx on public.inventory_items (category);
+create index if not exists inventory_items_owner_idx    on public.inventory_items (owner);
+create index if not exists inventory_items_location_idx on public.inventory_items (location);
 create index if not exists inventory_items_batch_idx    on public.inventory_items (batch_id);
 create index if not exists inventory_items_created_idx  on public.inventory_items (created_at desc);
 
