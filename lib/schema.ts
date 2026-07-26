@@ -12,7 +12,9 @@ export type CanonicalField =
   | 'location'
   | 'owner'
   | 'supplier'
-  | 'reorder_level';
+  | 'reorder_level'
+  | 'status'
+  | 'assigned_to';
 
 export type FieldType = 'string' | 'number';
 
@@ -97,6 +99,18 @@ export const FIELD_DEFS: FieldDef[] = [
     synonyms: ['reorder level', 'reorder_level', 'reorder point', 'min stock', 'min_stock', 'minimum', 'threshold', 'safety stock'],
     description: 'Stock level at which the item should be reordered',
   },
+  {
+    field: 'status',
+    type: 'string',
+    synonyms: ['status', 'state', 'condition', 'lifecycle', 'stage', 'disposition'],
+    description: 'Lifecycle status (in stock, deployed, in repair, retired, recycled)',
+  },
+  {
+    field: 'assigned_to',
+    type: 'string',
+    synonyms: ['assigned to', 'assigned_to', 'assignee', 'holder', 'user', 'custodian', 'issued to', 'checked out to', 'in use by'],
+    description: 'Person the asset is currently issued to / in use by',
+  },
 ];
 
 export const CANONICAL_FIELDS: CanonicalField[] = FIELD_DEFS.map((f) => f.field);
@@ -118,5 +132,7 @@ export interface CanonicalItem {
   owner: string | null;
   supplier: string | null;
   reorder_level: number | null;
+  status: string | null;
+  assigned_to: string | null;
   raw: Record<string, unknown>;
 }

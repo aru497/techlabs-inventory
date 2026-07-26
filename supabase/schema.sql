@@ -35,6 +35,10 @@ create table if not exists public.inventory_items (
   owner         text,                           -- customer this stock belongs to
   supplier      text,
   reorder_level numeric,
+  status        text not null default 'in_stock', -- lifecycle: in_stock|deployed|in_repair|retired|recycled
+  assigned_to   text,                           -- person the asset is issued to
+  next_calibration date,                        -- next calibration / maintenance due
+  notes         text,
   source        text,                           -- filename or sheet URL
   raw           jsonb,                           -- original row, for audit
   created_at    timestamptz not null default now(),
@@ -45,6 +49,8 @@ create index if not exists inventory_items_sku_idx      on public.inventory_item
 create index if not exists inventory_items_category_idx on public.inventory_items (category);
 create index if not exists inventory_items_owner_idx    on public.inventory_items (owner);
 create index if not exists inventory_items_location_idx on public.inventory_items (location);
+create index if not exists inventory_items_status_idx   on public.inventory_items (status);
+create index if not exists inventory_items_nextcal_idx  on public.inventory_items (next_calibration);
 create index if not exists inventory_items_batch_idx    on public.inventory_items (batch_id);
 create index if not exists inventory_items_created_idx  on public.inventory_items (created_at desc);
 

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('inventory_items')
-    .select('id, sku, name, category, quantity, unit, unit_price, currency, location, owner, supplier, created_at')
+    .select('id, sku, name, description, category, quantity, unit, unit_price, currency, location, owner, supplier, reorder_level, status, assigned_to, next_calibration, notes, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
 

@@ -183,6 +183,8 @@ export async function normalize(headers: string[], rows: Row[]): Promise<Normali
       owner: null,
       supplier: null,
       reorder_level: null,
+      status: null,
+      assigned_to: null,
       raw: row,
     };
     const target = item as unknown as Record<string, string | number | null>;

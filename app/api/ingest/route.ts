@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseFile, parseGoogleSheet, ParsedSource } from '@/lib/parse';
 import { normalize } from '@/lib/normalize';
 import { getServiceClient } from '@/lib/supabase';
+import { normalizeStatus } from '@/lib/itam';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -108,6 +109,8 @@ export async function POST(req: NextRequest) {
     owner: item.owner,
     supplier: item.supplier,
     reorder_level: item.reorder_level,
+    status: normalizeStatus(item.status) || 'in_stock',
+    assigned_to: item.assigned_to,
     source: sourceName,
     raw: item.raw,
   }));
