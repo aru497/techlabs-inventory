@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Warehouse } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,10 +42,7 @@ export default function LoginPage() {
     <div className="login-shell">
       <form className="glass login-card" onSubmit={submit}>
         <div className="login-badge">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" />
-            <path d="m3 8 9 5 9-5M12 13v8" />
-          </svg>
+          <Warehouse size={24} strokeWidth={1.7} />
         </div>
         <p className="eyebrow" style={{ margin: '18px 0 8px' }}>TechLabs · Inventory</p>
         <h1 className="login-title">Sign in</h1>

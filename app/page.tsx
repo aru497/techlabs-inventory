@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Upload, Sheet, Search, Download, PackageOpen, LayoutGrid, Tag } from 'lucide-react';
 
 interface InventoryRow {
   id: string;
@@ -26,21 +27,15 @@ interface IngestResult {
   columnMapping?: Record<string, string | null>;
 }
 
-/* ── Inline icons (consistent stroke, no icon library / emoji) ─────────────── */
-const svg = (path: React.ReactNode, size = 18) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {path}
-  </svg>
-);
-const IconUpload = () => svg(<><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></>);
-const IconSheet = () => svg(<><rect x="3.5" y="3.5" width="17" height="17" rx="2.5" /><path d="M3.5 9h17M3.5 14.5h17M9 9v11.5M15 9v11.5" /></>);
-const IconSearch = () => svg(<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></>);
-const IconExport = () => svg(<><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M5 21h14" /></>);
-const IconBox = () => svg(<><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></>, 26);
-const IconGrid = () => svg(<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>, 22);
-
-// One clean tag glyph per asset type — consistent icon language, colour-coded by data.
-const IconType = () => svg(<><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h6l9.5 9.5-6 6L4.5 12V7.5Z" /><circle cx="8" cy="10" r="1.4" /></>, 22);
+/* ── Icons (Lucide, consistent 1.7 stroke) ─────────────────────────────────── */
+const STROKE = 1.7;
+const IconUpload = () => <Upload size={18} strokeWidth={STROKE} />;
+const IconSheet = () => <Sheet size={18} strokeWidth={STROKE} />;
+const IconSearch = () => <Search size={18} strokeWidth={STROKE} />;
+const IconExport = () => <Download size={16} strokeWidth={STROKE} />;
+const IconBox = () => <PackageOpen size={26} strokeWidth={1.5} />;
+const IconGrid = () => <LayoutGrid size={22} strokeWidth={STROKE} />;
+const IconType = () => <Tag size={20} strokeWidth={STROKE} />;
 
 function toCsv(rows: InventoryRow[]): string {
   const cols: (keyof InventoryRow)[] = ['sku', 'name', 'category', 'quantity', 'unit', 'unit_price', 'currency', 'location', 'owner', 'supplier'];
