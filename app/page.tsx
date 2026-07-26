@@ -37,6 +37,10 @@ const IconSheet = () => svg(<><rect x="3.5" y="3.5" width="17" height="17" rx="2
 const IconSearch = () => svg(<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></>);
 const IconExport = () => svg(<><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M5 21h14" /></>);
 const IconBox = () => svg(<><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></>, 26);
+const IconGrid = () => svg(<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>, 22);
+
+// One clean tag glyph per asset type — consistent icon language, colour-coded by data.
+const IconType = () => svg(<><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h6l9.5 9.5-6 6L4.5 12V7.5Z" /><circle cx="8" cy="10" r="1.4" /></>, 22);
 
 function toCsv(rows: InventoryRow[]): string {
   const cols: (keyof InventoryRow)[] = ['sku', 'name', 'category', 'quantity', 'unit', 'unit_price', 'currency', 'location', 'owner', 'supplier'];
@@ -60,6 +64,7 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [owner, setOwner] = useState('');
   const [location, setLocation] = useState('');
+  const [category, setCategory] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -107,25 +112,36 @@ export default function Home() {
     [items],
   );
 
+  // Asset types with counts, for the category-first browse.
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of items) {
+      const c = it.category || 'Uncategorized';
+      map.set(c, (map.get(c) ?? 0) + 1);
+    }
+    return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [items]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((it) => {
+      if (category && (it.category || 'Uncategorized') !== category) return false;
       if (owner && it.owner !== owner) return false;
       if (location && it.location !== location) return false;
       if (!q) return true;
       return [it.sku, it.name, it.category, it.location, it.owner, it.supplier]
         .some((v) => v && v.toLowerCase().includes(q));
     });
-  }, [items, query, owner, location]);
+  }, [items, query, owner, location, category]);
 
-  const hasFilter = Boolean(query || owner || location);
+  const hasFilter = Boolean(query || owner || location || category);
 
   function exportCsv() {
     const csv = toCsv(filtered);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const tag = [owner, location].filter(Boolean).join('-').replace(/\s+/g, '_') || 'all';
+    const tag = [category, owner, location].filter(Boolean).join('-').replace(/\s+/g, '_') || 'all';
     a.href = url;
     a.download = `inventory-${tag}.csv`;
     document.body.appendChild(a);
@@ -268,39 +284,71 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Search + filters + export ───────────────────────────────────────── */}
-      <div className="toolbar glass reveal">
-        <div className="search">
-          <span className="search-icon"><IconSearch /></span>
-          <input
-            type="text"
-            placeholder="Search SKU, name, category, warehouse, customer…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search inventory"
-          />
+      {/* ── Step 1: choose an asset type ────────────────────────────────────── */}
+      {items.length > 0 && (
+        <>
+          <div className="section-title reveal">Choose an asset type</div>
+          <div className="type-grid reveal">
+            <button
+              className={`type-card${category === '' ? ' active' : ''}`}
+              onClick={() => setCategory('')}
+              aria-pressed={category === ''}
+            >
+              <span className="type-icon"><IconGrid /></span>
+              <span className="type-name">All items</span>
+              <span className="type-count">{items.length}</span>
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.name}
+                className={`type-card${category === c.name ? ' active' : ''}`}
+                onClick={() => setCategory((v) => (v === c.name ? '' : c.name))}
+                aria-pressed={category === c.name}
+              >
+                <span className="type-icon"><IconType /></span>
+                <span className="type-name">{c.name}</span>
+                <span className="type-count">{c.count}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Step 2: search / filter / export within the chosen type ─────────── */}
+      {items.length > 0 && (
+        <div className="toolbar glass reveal">
+          <div className="search">
+            <span className="search-icon"><IconSearch /></span>
+            <input
+              type="text"
+              placeholder={category ? `Search within ${category}…` : 'Search SKU, name, category, warehouse, customer…'}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search inventory"
+            />
+          </div>
+          <div className="filters">
+            <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Filter by customer">
+              <option value="">All customers</option>
+              {owners.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select value={location} onChange={(e) => setLocation(e.target.value)} aria-label="Filter by warehouse">
+              <option value="">All warehouses</option>
+              {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <button className="export-btn" onClick={exportCsv} disabled={!filtered.length}>
+              <IconExport />Export{hasFilter ? ' filtered' : ''} CSV
+            </button>
+          </div>
         </div>
-        <div className="filters">
-          <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Filter by customer">
-            <option value="">All customers</option>
-            {owners.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={location} onChange={(e) => setLocation(e.target.value)} aria-label="Filter by warehouse">
-            <option value="">All warehouses</option>
-            {locations.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
-          <button className="export-btn" onClick={exportCsv} disabled={!filtered.length}>
-            <IconExport />Export{hasFilter ? ' filtered' : ''} CSV
-          </button>
-        </div>
-      </div>
+      )}
 
       <div className="section-title reveal">
-        Inventory
+        {category || 'Inventory'}
         <span className="count">
           {hasFilter ? `· ${filtered.length} of ${items.length}` : items.length ? `· ${items.length} items` : ''}
         </span>
-        {hasFilter && <button className="clear-btn" onClick={() => { setQuery(''); setOwner(''); setLocation(''); }}>Clear</button>}
+        {hasFilter && <button className="clear-btn" onClick={() => { setQuery(''); setOwner(''); setLocation(''); setCategory(''); }}>Clear</button>}
       </div>
 
       {configured === false ? (
